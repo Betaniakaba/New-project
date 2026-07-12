@@ -26,16 +26,31 @@ computer where you open the page. Nothing is ever sent anywhere.
   thousands to millions of rows) import without freezing the browser.
 - **Full-dataset duplicate scan** — cross-references every record against the
   rest of the dataset in a background worker:
-  - identical **National ID** → flagged as a sure duplicate;
-  - fuzzy **name matching** (phonetic keys + token-level Jaro-Winkler) that
-    catches typos, alternative spellings and **swapped name order**;
-  - corroborated by **date of birth, phone, sex and location**;
-  - contradiction penalties (different national IDs, different birth years)
-    and evidence scaling (missing data lowers confidence) to keep false
-    positives down;
-  - blocking (phonetic name key / DOB / phone / ID) so the scan compares only
-    plausible candidate pairs — ~100,000 records scan in seconds, and
-    million-record datasets remain tractable.
+  - identical **National ID** → flagged as a sure duplicate (values shared by
+    very many records — placeholders like "NA" or "00000" — are recognized
+    and never mass-merge strangers);
+  - **nearly identical National IDs** (a one-digit typo) count as strong
+    evidence instead of hiding an otherwise perfect match;
+  - fuzzy **name matching** (phonetic keys with Amharic-romanization folding
+    such as Tsegaye/Segaye or Qedir/Kedir, plus token-level Jaro-Winkler)
+    that catches typos, alternative spellings and **swapped name order** —
+    while one *genuinely different* name part (siblings, twins) lowers the
+    score;
+  - tolerant **date-of-birth comparison**: day/month swaps and off-by-one
+    years count as near-matches, and default "January 1" birthdays are
+    treated as weak evidence;
+  - corroborated by **phone, sex, location and household ID**;
+  - contradiction penalties (clearly different national IDs, birth years far
+    apart) and evidence scaling (missing data lowers confidence) to keep
+    false positives down;
+  - blocking (phonetic name key and name-part pairs / DOB / phone / ID /
+    household) so the scan compares only plausible candidate pairs, with
+    oversized blocks split by birth year and sex rather than dropped —
+    ~100,000 records scan in seconds, and million-record datasets remain
+    tractable;
+  - "probable" matches are grouped; "possible" matches are reported as
+    stand-alone pairs and deliberately never chained, so unrelated people
+    can't merge into one giant group.
 - **Review workflow** — duplicate groups ranked by confidence ("probable" vs
   "possible"), side-by-side record comparison, delete records, mark groups as
   reviewed, and export a full duplicate report to CSV.
@@ -53,8 +68,9 @@ Tune in **Settings & Tools**:
 - **Possible threshold** (default 0.70) — pairs between the two thresholds are
   reported as stand-alone pairs for review (they are deliberately never
   chained together, to avoid unrelated people being merged into one group).
-- **Block cap** — very common name blocks larger than this are skipped for
-  speed (exact ID matches are never skipped).
+- **Block cap** — comparison blocks larger than this are split by birth year
+  and sex first; only what still doesn't fit is skipped (exact national-ID
+  matches are never skipped).
 
 ## Important notes
 
