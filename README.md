@@ -72,6 +72,23 @@ Tune in **Settings & Tools**:
   and sex first; only what still doesn't fit is skipped (exact national-ID
   matches are never skipped).
 
+## Known trade-offs
+
+- **Twins vs. re-registrations**: two records that agree on everything except
+  one name part (same DOB, same household) look identical whether they are
+  twins or the same person recorded under a different naming convention. The
+  engine surfaces them as "possible" pairs for human review rather than
+  merging them — unless the National IDs agree, which settles it.
+- **The live registration check is a quick screen** (exact ID/phone/DOB and
+  phonetic-name candidates). The full scan in the Duplicates tab uses wider
+  blocking and is the authoritative cross-reference — run it after imports
+  and periodically.
+- National-ID values shared by more than 25 records are treated as
+  placeholders (e.g. "NA", "0000000") and ignored as identifiers; the scan
+  summary reports how many such values were found.
+- Ethiopian-calendar dates are not converted; datasets mixing EC and
+  Gregorian birth dates should be converted to one calendar before import.
+
 ## Important notes
 
 - Data is per-browser, per-computer. To move or back up data, use

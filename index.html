@@ -113,7 +113,7 @@ footer{max-width:1200px;margin:0 auto;padding:10px 22px 30px;color:var(--muted);
 <section id="tab-register" class="hidden">
   <div class="card">
     <h2 id="reg-title">Register a beneficiary</h2>
-    <p class="hint">Before saving, the form is checked against every stored record for possible duplicates.</p>
+    <p class="hint">Before saving, the form is checked against existing records for possible duplicates. This is a quick screen (exact ID/phone/DOB and phonetic name candidates) — the full scan in the Duplicates tab is more thorough and remains the authoritative check.</p>
     <form id="reg-form">
       <div class="grid">
         <div><label>Beneficiary code / Reg. no.</label><input name="code"></div>
@@ -330,6 +330,8 @@ function normId(s){
   if(v.length<5) return '';
   if(/^(.)\\1+$/.test(v)) return '';
   if(/^(UNKNOWN|NOTAVAILABLE|NOTAPPLICABLE|PENDING|MISSING)/.test(v)) return '';
+  var dg = v.replace(/[^0-9]/g,'');
+  if(dg.length>=4 && /^0+$/.test(dg)) return '';   /* ETH0000000-style structured dummies */
   return v;
 }
 function jaroWinkler(a,b){
@@ -423,15 +425,15 @@ function scorePair(a,b){
     if(ds===1) reasons.push('same date of birth');
     else if(ds===0.9) reasons.push('day/month-swapped date of birth');
   }
-  var idConflict = false;
+  var idConflict = false, idAgree = false;
   if(a.nid && b.nid){
     var is;
-    if(a.nid===b.nid){ is=1; reasons.push('same national ID'); }
+    if(a.nid===b.nid){ is=1; idAgree=true; reasons.push('same national ID'); }
     else{
       /* near-identical IDs are a typo, not a different person — a binary
          comparison would let a one-digit ID error hide a full-field match */
       var isim = jaroWinkler(a.nid, b.nid);
-      if(isim>=0.93){ is=0.85; reasons.push('nearly identical national ID'); }
+      if(isim>=0.93){ is=0.85; idAgree=true; reasons.push('nearly identical national ID'); }
       else { is=0; idConflict=true; }
     }
     s += is*0.20; w += 0.20;
@@ -447,8 +449,11 @@ function scorePair(a,b){
   /* evidence scaling: when few fields are comparable (missing data), a perfect
      agreement on what little exists must not read as near-certainty */
   score *= 0.6 + 0.4*(w<1?w:1);
-  /* hard contradictions are strong evidence of two different people */
-  if(nd.sim>0.7 && nd.min<0.6) score *= 0.85;  /* one name part genuinely different (e.g. twins/siblings) */
+  /* hard contradictions are strong evidence of two different people.
+     The name-part penalty is waived when the national IDs agree: siblings
+     essentially never share an ID, but the same person re-registered under
+     a different name convention can. */
+  if(nd.sim>0.7 && nd.min<0.6 && !idAgree) score *= 0.85;  /* one name part genuinely different (e.g. twins/siblings) */
   if(ds===0) score *= 0.85;                     /* birth years clearly apart (2+ years) */
   if(idConflict) score *= 0.8;                  /* two clearly different national IDs */
   if(a.nid && b.nid && a.nid===b.nid && score<0.95) score = 0.95; /* identical national ID is decisive */
@@ -619,9 +624,16 @@ onmessage = function(e){
        far less selective than full-name keys (common two-name combinations),
        so they get their own, much tighter block cap below. */
     if(codes.length>=2){
+      var pseen = {};
       for(var x1=0;x1<codes.length-1;x1++)
-        for(var y1=x1+1;y1<codes.length;y1++)
-          push(blocks.namePair, codes[x1]+'.'+codes[y1], r.id);
+        for(var y1=x1+1;y1<codes.length;y1++){
+          var pk1 = codes[x1]+'.'+codes[y1];
+          /* two name parts can share a code (repeated family names) — don't
+             enter the same record twice into one block */
+          if(pseen[pk1]) continue;
+          pseen[pk1] = 1;
+          push(blocks.namePair, pk1, r.id);
+        }
     }
     push(blocks.dob, r.dob, r.id);
     push(blocks.phone, r.ph, r.id);
@@ -636,13 +648,25 @@ onmessage = function(e){
   var weak = [];         /* possible links: reported as standalone pairs, never chained */
   var skippedBlocks = 0, pairsScored = 0;
 
-  /* exact national-ID blocks: all members are duplicates by definition —
-     but a value shared by very many records is a placeholder that slipped
-     through normId, not a real ID, and must not mass-merge strangers */
+  /* an ID value shared by very many records is a placeholder that slipped
+     through normId, not a real ID. Strip it from the records themselves so
+     it can't act as an identifier anywhere — not in the union pass below,
+     and not through scorePair's "identical ID is decisive" clamp when the
+     records meet in some other block. */
+  var placeholderIds = 0;
+  for(var keyP in blocks.nid){
+    if(blocks.nid[keyP].length>25){
+      placeholderIds++;
+      var pids = blocks.nid[keyP];
+      for(var pi=0;pi<pids.length;pi++) byId[pids[pi]].nid = '';
+      delete blocks.nid[keyP];
+    }
+  }
+
+  /* exact national-ID blocks: all members are duplicates by definition */
   for(var key in blocks.nid){
     var ids = blocks.nid[key];
     if(ids.length<2) continue;
-    if(ids.length>25){ skippedBlocks++; continue; }
     ids.sort(function(a,b){return a-b;});
     for(var j=1;j<ids.length;j++){
       union(ids[0], ids[j]);
@@ -663,7 +687,7 @@ onmessage = function(e){
           (parts[pk]||(parts[pk]=[])).push(ids[q]);
         }
         var pkeys=Object.keys(parts);
-        if(pkeys.length<2){ skippedBlocks++; return; }
+        if(pkeys.length<2){ processBlock(ids, cap, depth+1); return; }  /* degenerate split: try the next key */
         for(var p2=0;p2<pkeys.length;p2++) processBlock(parts[pkeys[p2]], cap, depth+1);
       } else skippedBlocks++;
       return;
@@ -671,7 +695,8 @@ onmessage = function(e){
     ids.sort(function(a,b){return a-b;});
     for(var x=0;x<ids.length-1;x++){
       for(var y=x+1;y<ids.length;y++){
-        var k = ids[x]*16777216 + ids[y];
+        if(ids[x]===ids[y]) continue;  /* same record via duplicate block keys */
+        var k = ids[x]*67108864 + ids[y];  /* injective while ids < 2^26 (~67M records) */
         if(seenPairs.has(k)) continue;
         var res = scorePair(byId[ids[x]], byId[ids[y]]);
         seenPairs.add(k);
@@ -734,7 +759,7 @@ onmessage = function(e){
     groups.push({ members:[W[0],W[1]], score: Math.round(W[2]*100)/100, reasons: W[3] });
   }
   groups.sort(function(a,b){ return b.score-a.score || b.members.length-a.members.length; });
-  postMessage({type:'done', groups:groups, stats:{records:n, pairs:pairsScored, skippedBlocks:skippedBlocks}});
+  postMessage({type:'done', groups:groups, stats:{records:n, pairs:pairsScored, skippedBlocks:skippedBlocks, placeholderIds:placeholderIds}});
   rows = []; parent = {};
 };
 `;
@@ -785,19 +810,29 @@ async function findLiveCandidates(rec){
   const st = t.objectStore('beneficiaries');
   const seen = new Map();
   async function collect(indexName, key){
-    if(!key) return;
+    if(!key) return [];
     const rows = await reqP(st.index(indexName).getAll(key, 500));
     rows.forEach(r=>{ if(r.id!==editingId) seen.set(r.id, r); });
+    return rows;
   }
-  await collect('nidNorm', rec.nidNorm);
+  // same placeholder rule as the scan: an ID shared by 25+ records is not an identifier
+  let placeholderNid = false;
+  if(rec.nidNorm){
+    const nidRows = await reqP(st.index('nidNorm').getAll(rec.nidNorm, 500));
+    if(nidRows.length>25) placeholderNid = true;
+    else nidRows.forEach(r=>{ if(r.id!==editingId) seen.set(r.id, r); });
+  }
   await collect('phoneNorm', rec.phoneNorm);
   await collect('nameKey', rec.nameKey);
   await collect('dob', rec.dob);
   const cfg = getSettings();
   const p = projOf(rec);
+  if(placeholderNid) p.nid = '';
   const out = [];
   for(const r of seen.values()){
-    const {score,reasons} = scorePair(p, projOf(r));
+    const q = projOf(r);
+    if(placeholderNid && q.nid===rec.nidNorm) q.nid = '';
+    const {score,reasons} = scorePair(p, q);
     if(score >= cfg.thLow) out.push({r, score, reasons});
   }
   out.sort((a,b)=>b.score-a.score);
@@ -921,13 +956,15 @@ async function loadPageInner(direction){
   loadPage._lastKey = lastKey;
 }
 $('#pg-next').addEventListener('click', ()=>{
-  if(loadPage._lastKey==null) return;
+  // the busy check must precede the stack mutation, or a double-click
+  // desyncs pageStack from the rendered page
+  if(loadPage._busy || loadPage._lastKey==null) return;
   pageStack.push(curLowerBound);
   curLowerBound = loadPage._lastKey;
   loadPage(1);
 });
 $('#pg-prev').addEventListener('click', ()=>{
-  if(!pageStack.length) return;
+  if(loadPage._busy || !pageStack.length) return;
   curLowerBound = pageStack.pop();
   loadPage(1);
 });
@@ -975,6 +1012,7 @@ function parseCSVChunk(state, text, onRow){
   const d = state.delim;
   let i = 0;
   if(state.pendingQuote){
+    if(!text.length) return;  // empty decode (partial multibyte chunk): keep waiting
     // previous chunk ended on a quote inside a quoted field: '""' escape or closing '"'?
     state.pendingQuote = false;
     if(text[0]==='"'){ field+='"'; i=1; }
@@ -1146,6 +1184,10 @@ async function runScan(){
   try{
     workerUrl = URL.createObjectURL(new Blob([WORKER_SRC],{type:'text/javascript'}));
     worker = new Worker(workerUrl);
+    /* catch worker faults from the very start — an error during the load
+       phase would otherwise leave the scan hanging forever */
+    let earlyWorkerErr = null;
+    worker.onerror = e=>{ earlyWorkerErr = new Error(e.message || 'scan worker failed'); };
     let loaded = 0;
     await eachChunk(5000, chunk=>{
       const rows = chunk.map(projOf);
@@ -1154,6 +1196,7 @@ async function runScan(){
       $('#scan-prog').style.width = Math.round(loaded/total*30)+'%';
       $('#scan-status').textContent = `Loading records… ${fmtN(loaded)} / ${fmtN(total)}`;
     });
+    if(earlyWorkerErr) throw earlyWorkerErr;
     $('#scan-status').textContent = 'Comparing records…';
     const result = await new Promise((res,rej)=>{
       worker.onerror = e=>rej(new Error(e.message || 'scan worker failed'));
@@ -1178,7 +1221,7 @@ async function runScan(){
     }
     await txDone(t);
     const dupRecords = dupIds.size;
-    await metaSet('lastScan', {at:new Date().toISOString(), groups:result.groups.length, dupRecords, records:result.stats.records, pairs:result.stats.pairs, skippedBlocks:result.stats.skippedBlocks});
+    await metaSet('lastScan', {at:new Date().toISOString(), groups:result.groups.length, dupRecords, records:result.stats.records, pairs:result.stats.pairs, skippedBlocks:result.stats.skippedBlocks, placeholderIds:result.stats.placeholderIds});
 
     $('#scan-prog').style.width='100%';
     $('#scan-status').textContent='';
@@ -1187,6 +1230,7 @@ async function runScan(){
       Scanned <b>${fmtN(s.records)}</b> records (${fmtN(s.pairs)} candidate pairs compared).
       Found <b>${fmtN(result.groups.length)}</b> duplicate group${result.groups.length===1?'':'s'} involving <b>${fmtN(dupRecords)}</b> records.
       ${s.skippedBlocks?`<br><span class="muted">${fmtN(s.skippedBlocks)} oversized comparison blocks could not be fully compared (raise the block cap in Settings to include more).</span>`:''}
+      ${s.placeholderIds?`<br><span class="muted">${fmtN(s.placeholderIds)} national-ID value${s.placeholderIds===1?'':'s'} shared by 25+ records looked like placeholders (e.g. "NA", "0000000") and were ignored as identifiers.</span>`:''}
     </div>`;
     dupPage = 0;
     renderDupList();
