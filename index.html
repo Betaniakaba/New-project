@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beneficiary Registry &amp; Duplicate Finder</title>
+<style>
+:root{
+  --bg:#f5f7fa; --panel:#ffffff; --text:#1a2433; --muted:#5b6b80; --line:#dde4ec;
+  --accent:#1f6feb; --accent-soft:#e3edfb; --danger:#c93c3c; --danger-soft:#fbe7e7;
+  --warn:#b96a00; --warn-soft:#fdf1de; --ok:#1a7f4b; --ok-soft:#e2f4ea;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1520; --panel:#171f2e; --text:#e7edf5; --muted:#93a3b8; --line:#2a3547;
+    --accent:#4d8ef7; --accent-soft:#1c2d4a; --danger:#e06666; --danger-soft:#3a2020;
+    --warn:#e0a04d; --warn-soft:#3a2f1c; --ok:#4dc38a; --ok-soft:#1b3227; }
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.45}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;font-weight:650}
+header .sub{color:var(--muted);font-size:13px}
+nav{display:flex;gap:4px;background:var(--panel);border-bottom:1px solid var(--line);padding:0 14px;overflow-x:auto}
+nav button{background:none;border:none;border-bottom:3px solid transparent;padding:12px 16px;font-size:14.5px;color:var(--muted);cursor:pointer;white-space:nowrap;font-weight:550}
+nav button.active{color:var(--accent);border-bottom-color:var(--accent)}
+nav button:hover{color:var(--text)}
+main{max-width:1200px;margin:0 auto;padding:22px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px}
+.card h2{margin:0 0 6px;font-size:16.5px}
+.card h3{margin:18px 0 8px;font-size:14.5px}
+.card p.hint{color:var(--muted);font-size:13.5px;margin:2px 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px;font-weight:550}
+input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--text);font-size:14px;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+button.btn{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer}
+button.btn:disabled{opacity:.5;cursor:default}
+button.btn.secondary{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button.btn.danger{background:var(--danger)}
+button.btn.ghost-danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+button.btn.small{padding:5px 10px;font-size:12.5px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+.stat .num{font-size:26px;font-weight:700}
+.stat .lbl{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{ text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:hover td{background:var(--accent-soft)}
+.table-wrap{overflow-x:auto}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:650}
+.badge.high{background:var(--danger-soft);color:var(--danger)}
+.badge.mid{background:var(--warn-soft);color:var(--warn)}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.info{background:var(--accent-soft);color:var(--accent)}
+.progress{height:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin:8px 0}
+.progress>div{height:100%;background:var(--accent);width:0%;transition:width .15s}
+.dup-group{border:1px solid var(--line);border-radius:9px;margin-bottom:12px;overflow:hidden}
+.dup-group>summary{padding:12px 16px;cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--panel);list-style:none}
+.dup-group>summary::-webkit-details-marker{display:none}
+.dup-group[open]>summary{border-bottom:1px solid var(--line)}
+.dup-body{padding:12px 16px;overflow-x:auto}
+.alert{border-radius:8px;padding:12px 16px;margin:12px 0;font-size:14px}
+.alert.warn{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
+.alert.ok{background:var(--ok-soft);color:var(--ok);border:1px solid var(--ok)}
+.alert.danger{background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger)}
+.pager{display:flex;gap:8px;align-items:center;margin-top:12px}
+.muted{color:var(--muted)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+.hidden{display:none}
+footer{max-width:1200px;margin:0 auto;padding:10px 22px 30px;color:var(--muted);font-size:12.5px}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 20px;border-radius:8px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:99}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>Beneficiary Registry &amp; Duplicate Finder</h1>
+  <span class="sub">All data stays on this computer (browser local database — IndexedDB)</span>
+</header>
+<nav id="nav">
+  <button data-tab="dashboard" class="active">Dashboard</button>
+  <button data-tab="register">Register</button>
+  <button data-tab="browse">Beneficiaries</button>
+  <button data-tab="import">Import CSV</button>
+  <button data-tab="dups">Duplicates</button>
+  <button data-tab="settings">Settings &amp; Tools</button>
+</nav>
+<main>
+
+<!-- ============ DASHBOARD ============ -->
+<section id="tab-dashboard">
+  <div class="stats">
+    <div class="stat"><div class="num" id="st-total">–</div><div class="lbl">Beneficiaries stored</div></div>
+    <div class="stat"><div class="num" id="st-groups">–</div><div class="lbl">Duplicate groups (last scan)</div></div>
+    <div class="stat"><div class="num" id="st-dup-records">–</div><div class="lbl">Records involved in duplicates</div></div>
+    <div class="stat"><div class="num" id="st-last-scan">–</div><div class="lbl">Last scan</div></div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <h2>How this works</h2>
+    <p class="hint" style="margin-bottom:0">
+      Register beneficiaries one by one or import your existing CSV files (any column layout — you map the columns).
+      Everything is stored in this browser's local database on this computer; nothing is sent anywhere.
+      The <b>Duplicates</b> tab cross-references the whole dataset: exact matches on National ID and phone,
+      plus fuzzy matching on names (typos, swapped name order, different spellings) corroborated by date of birth,
+      sex and location. New registrations are also checked live against the existing records before saving.
+    </p>
+  </div>
+</section>
+
+<!-- ============ REGISTER ============ -->
+<section id="tab-register" class="hidden">
+  <div class="card">
+    <h2 id="reg-title">Register a beneficiary</h2>
+    <p class="hint">Before saving, the form is checked against every stored record for possible duplicates.</p>
+    <form id="reg-form">
+      <div class="grid">
+        <div><label>Beneficiary code / Reg. no.</label><input name="code"></div>
+        <div><label>First name *</label><input name="firstName" required></div>
+        <div><label>Father's name</label><input name="middleName"></div>
+        <div><label>Grandfather's / last name</label><input name="lastName"></div>
+        <div><label>Sex</label><select name="sex"><option value=""></option><option value="F">Female</option><option value="M">Male</option></select></div>
+        <div><label>Date of birth</label><input name="dob" type="date"></div>
+        <div><label>National ID</label><input name="nationalId"></div>
+        <div><label>Phone</label><input name="phone"></div>
+        <div><label>Household ID</label><input name="householdId"></div>
+        <div><label>Household size</label><input name="householdSize" type="number" min="1"></div>
+        <div><label>Region</label><input name="region"></div>
+        <div><label>Zone</label><input name="zone"></div>
+        <div><label>Woreda / District</label><input name="woreda"></div>
+        <div><label>Kebele / Village</label><input name="kebele"></div>
+        <div><label>Program / Project</label><input name="program"></div>
+        <div><label>Registration date</label><input name="regDate" type="date"></div>
+      </div>
+      <div style="margin-top:12px"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+      <div class="row" style="margin-top:14px">
+        <button type="submit" class="btn" id="reg-save">Check for duplicates &amp; save</button>
+        <button type="button" class="btn secondary" id="reg-clear">Clear form</button>
+      </div>
+    </form>
+    <div id="reg-dup-panel" class="hidden">
+      <div class="alert warn" id="reg-dup-msg"></div>
+      <div class="table-wrap" id="reg-dup-table"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn danger" id="reg-save-anyway">Save anyway (not a duplicate)</button>
+        <button class="btn secondary" id="reg-cancel-save">Don't save</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BROWSE ============ -->
+<section id="tab-browse" class="hidden">
+  <div class="card">
+    <h2>Beneficiaries</h2>
+    <div class="row" style="margin:10px 0 14px">
+      <input id="q-name" placeholder="Search name…" style="max-width:220px">
+      <input id="q-id" placeholder="National ID (exact)" style="max-width:190px">
+      <input id="q-phone" placeholder="Phone (exact)" style="max-width:170px">
+      <button class="btn" id="btn-search">Search</button>
+      <button class="btn secondary" id="btn-search-clear">Show all</button>
+    </div>
+    <div class="table-wrap"><table id="browse-table">
+      <thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Sex</th><th>DOB</th><th>National ID</th><th>Phone</th><th>Woreda</th><th>Kebele</th><th>Program</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="pager">
+      <button class="btn small secondary" id="pg-prev">◀ Prev</button>
+      <span id="pg-info" class="muted"></span>
+      <button class="btn small secondary" id="pg-next">Next ▶</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IMPORT ============ -->
+<section id="tab-import" class="hidden">
+  <div class="card">
+    <h2>Import beneficiaries from CSV</h2>
+    <p class="hint">Works with large files (hundreds of thousands to millions of rows) — the file is read in a stream, not loaded at once. First row must be the column headers.</p>
+    <input type="file" id="csv-file" accept=".csv,.txt,text/csv">
+    <div id="map-panel" class="hidden">
+      <h3>Map your CSV columns to registry fields</h3>
+      <p class="hint">Auto-guessed from your headers — adjust as needed. Leave "— skip —" for columns you don't want.</p>
+      <div class="table-wrap"><table id="map-table"><thead><tr><th>Registry field</th><th>CSV column</th><th>Sample values</th></tr></thead><tbody></tbody></table></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="btn-import">Import file</button>
+        <span class="muted" id="import-rowcount"></span>
+      </div>
+      <div id="import-prog-wrap" class="hidden">
+        <div class="progress"><div id="import-prog"></div></div>
+        <div class="muted" id="import-status"></div>
+      </div>
+      <div id="import-done"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DUPLICATES ============ -->
+<section id="tab-dups" class="hidden">
+  <div class="card">
+    <h2>Duplicate detection — full dataset scan</h2>
+    <p class="hint">
+      Cross-references every record against the rest of the dataset. Sure matches: identical National ID.
+      Probable/possible matches: similar names (phonetic + edit-distance, handles swapped name order and typos)
+      weighted together with date of birth, phone, sex and location. Runs in the background — you can keep using other tabs.
+    </p>
+    <div class="row">
+      <button class="btn" id="btn-scan">Run duplicate scan</button>
+      <button class="btn secondary" id="btn-export-dups">Export duplicate report (CSV)</button>
+      <span class="muted" id="scan-config-note"></span>
+    </div>
+    <div id="scan-prog-wrap" class="hidden">
+      <div class="progress"><div id="scan-prog"></div></div>
+      <div class="muted" id="scan-status"></div>
+    </div>
+    <div id="scan-summary"></div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="margin:0">Duplicate groups</h2>
+      <label class="row" style="font-size:13px;color:var(--muted);width:auto"><input type="checkbox" id="hide-reviewed" style="width:auto"> hide reviewed</label>
+    </div>
+    <div id="dup-list" style="margin-top:14px"></div>
+    <div class="pager">
+      <button class="btn small secondary" id="dpg-prev">◀ Prev</button>
+      <span id="dpg-info" class="muted"></span>
+      <button class="btn small secondary" id="dpg-next">Next ▶</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section id="tab-settings" class="hidden">
+  <div class="card">
+    <h2>Matching sensitivity</h2>
+    <div class="grid">
+      <div><label>Probable-duplicate threshold (0–1)</label><input id="set-th-high" type="number" step="0.01" min="0.5" max="1"></div>
+      <div><label>Possible-duplicate threshold (0–1)</label><input id="set-th-low" type="number" step="0.01" min="0.3" max="1"></div>
+      <div><label>Max records per comparison block</label><input id="set-maxblock" type="number" min="50" max="5000"></div>
+    </div>
+    <p class="hint">Lower thresholds find more candidates but more false positives. Pairs scoring above the "possible" threshold are grouped; above "probable" they are flagged red. Very common name blocks larger than the block cap are skipped for speed (exact ID/phone matches are never skipped).</p>
+    <button class="btn" id="btn-save-settings">Save settings</button>
+  </div>
+  <div class="card">
+    <h2>Data tools</h2>
+    <div class="row">
+      <button class="btn secondary" id="btn-export-all">Export all beneficiaries (CSV)</button>
+      <button class="btn secondary" id="btn-demo">Generate demo data</button>
+      <input id="demo-n" type="number" value="5000" min="100" step="100" style="max-width:120px" title="number of demo records">
+    </div>
+    <p class="hint">Demo data creates realistic sample records including ~3% planted duplicates (typos, swapped names, shared IDs) so you can try the scan.</p>
+    <h3 style="color:var(--danger)">Danger zone</h3>
+    <button class="btn ghost-danger" id="btn-wipe">Delete ALL data from this computer</button>
+  </div>
+  <div class="card">
+    <h2>About storage &amp; capacity</h2>
+    <p class="hint" style="margin-bottom:0">
+      Data lives in this browser's IndexedDB for this page — it persists across restarts and works fully offline,
+      and browsers allow it to grow to many gigabytes (enough for millions of records). It is per-browser and
+      per-computer: to move data, use Export CSV here and Import CSV on the other machine. Regular exports are
+      your backup — clearing the browser's site data would erase the registry.
+    </p>
+  </div>
+</section>
+
+</main>
+<footer>Beneficiary Registry &amp; Duplicate Finder — single-file offline app. Keep regular CSV exports as backups.</footer>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ================================================================
+   Beneficiary Registry & Duplicate Finder
+   Single-file offline web app. Storage: IndexedDB.
+   Duplicate engine: blocking (phonetic name key, DOB, phone, ID)
+   + weighted field scoring + union-find clustering, in a Web Worker.
+   ================================================================ */
+
+/* ---------------- small utils ---------------- */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2800); }
+const fmtN = n => (n==null?'–':Number(n).toLocaleString());
+
+/* ---------------- name / field normalization (shared with worker) ---------------- */
+const NORM_SRC = `
+function stripDia(s){ return s.normalize ? s.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'') : s; }
+function normName(s){ return stripDia(String(s||'').toLowerCase()).replace(/[^a-z0-9\\s]/g,' ').replace(/\\s+/g,' ').trim(); }
+function nameTokens(s){ var n=normName(s); return n? n.split(' ').sort() : []; }
+function soundex(s){
+  s = String(s||'').toUpperCase().replace(/[^A-Z]/g,'');
+  if(!s) return '';
+  var codes={B:1,F:1,P:1,V:1,C:2,G:2,J:2,K:2,Q:2,S:2,X:2,Z:2,D:3,T:3,L:4,M:5,N:5,R:6};
+  var out=s[0], prev=codes[s[0]]||0;
+  for(var i=1;i<s.length && out.length<4;i++){
+    var ch=s[i], c=codes[ch];
+    if(c && c!==prev) out+=c;
+    if(ch!=='H' && ch!=='W') prev=c||0;
+  }
+  return (out+'000').slice(0,4);
+}
+function phoneticKey(fullName){
+  var t=nameTokens(fullName);
+  if(!t.length) return '';
+  return t.map(soundex).sort().join('.');
+}
+function normPhone(s){
+  var d=String(s||'').replace(/\\D/g,'');
+  if(!d) return '';
+  if(d.length>9) d=d.slice(-9);   /* compare on last 9 digits: ignores country code / leading 0 */
+  return d.length>=7 ? d : '';
+}
+function normId(s){ return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function jaroWinkler(a,b){
+  if(a===b) return 1;
+  var la=a.length, lb=b.length;
+  if(!la || !lb) return 0;
+  var md=Math.max(0, Math.floor(Math.max(la,lb)/2)-1);
+  var fa=new Array(la).fill(false), fb=new Array(lb).fill(false);
+  var m=0;
+  for(var i=0;i<la;i++){
+    var lo=Math.max(0,i-md), hi=Math.min(lb-1,i+md);
+    for(var j=lo;j<=hi;j++){
+      if(!fb[j] && a[i]===b[j]){ fa[i]=true; fb[j]=true; m++; break; }
+    }
+  }
+  if(!m) return 0;
+  var t=0,k=0;
+  for(var i2=0;i2<la;i2++){
+    if(fa[i2]){
+      while(!fb[k]) k++;
+      if(a[i2]!==b[k]) t++;
+      k++;
+    }
+  }
+  t/=2;
+  var jaro=(m/la + m/lb + (m-t)/m)/3;
+  var p=0;
+  while(p<4 && p<la && p<lb && a[p]===b[p]) p++;
+  return jaro + p*0.1*(1-jaro);
+}
+/* token-aware name similarity on space-joined, sorted, normalized names:
+   greedily pairs each token with its best counterpart, so one entirely
+   different name part (e.g. a different grandfather name) lowers the score,
+   while a merely missing extra token only costs half weight. */
+function tokenSim(a,b){
+  if(a===b) return a?1:0;
+  if(!a||!b) return 0;
+  var ta=a.split(' '), tb=b.split(' ');
+  if(ta.length===1 && tb.length===1) return jaroWinkler(a,b);
+  if(tb.length<ta.length){ var tmp=ta; ta=tb; tb=tmp; }
+  var la=ta.length, lb=tb.length;
+  var used=new Array(lb).fill(false), total=0;
+  for(var i=0;i<la;i++){
+    var best=0, bj=-1;
+    for(var j=0;j<lb;j++){
+      if(used[j]) continue;
+      var s=jaroWinkler(ta[i],tb[j]);
+      if(s>best){ best=s; bj=j; }
+    }
+    if(bj>=0) used[bj]=true;
+    total+=best;
+  }
+  return total/(la + (lb-la)*0.5);
+}
+`;
+(0, eval)(NORM_SRC); // indirect eval -> global scope: same helpers on main thread and in the worker
+
+function fullNameOf(r){ return [r.firstName, r.middleName, r.lastName].filter(Boolean).join(' '); }
+function sortedNameOf(r){ return nameTokens(fullNameOf(r)).join(' '); }
+
+/** Try to normalize assorted date strings to YYYY-MM-DD; return '' if hopeless. */
+function normDate(s){
+  s = String(s||'').trim();
+  if(!s) return '';
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if(m){ // ambiguous dd/mm vs mm/dd -> prefer dd/mm; flip when impossible
+    let d=+m[1], mo=+m[2];
+    if(mo>12 && d<=12){ const t=d; d=mo; mo=t; }
+    if(mo>=1 && mo<=12 && d>=1 && d<=31) return m[3]+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  }
+  const dt = new Date(s);
+  if(!isNaN(dt) && dt.getFullYear()>1850) return dt.toISOString().slice(0,10);
+  return '';
+}
+
+/* ---------------- settings ---------------- */
+const DEFAULT_SETTINGS = { thHigh:0.82, thLow:0.70, maxBlock:400 };
+function getSettings(){
+  try{ return Object.assign({}, DEFAULT_SETTINGS, JSON.parse(localStorage.getItem('bdf-settings')||'{}')); }
+  catch(e){ return {...DEFAULT_SETTINGS}; }
+}
+function saveSettings(s){ localStorage.setItem('bdf-settings', JSON.stringify(s)); }
+
+/* ---------------- IndexedDB layer ---------------- */
+const DB_NAME='beneficiary-registry', DB_VER=1;
+let dbp = null;
+function openDB(){
+  if(dbp) return dbp;
+  dbp = new Promise((res,rej)=>{
+    const rq = indexedDB.open(DB_NAME, DB_VER);
+    rq.onupgradeneeded = e=>{
+      const db = e.target.result;
+      const st = db.createObjectStore('beneficiaries',{keyPath:'id',autoIncrement:true});
+      st.createIndex('nidNorm','nidNorm',{unique:false});
+      st.createIndex('phoneNorm','phoneNorm',{unique:false});
+      st.createIndex('nameKey','nameKey',{unique:false});
+      db.createObjectStore('dupGroups',{keyPath:'gid',autoIncrement:true});
+      db.createObjectStore('meta',{keyPath:'key'});
+    };
+    rq.onsuccess = ()=>res(rq.result);
+    rq.onerror = ()=>rej(rq.error);
+  });
+  return dbp;
+}
+function tx(stores, mode){ return openDB().then(db=>db.transaction(stores,mode)); }
+function reqP(rq){ return new Promise((res,rej)=>{ rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error); }); }
+function txDone(t){ return new Promise((res,rej)=>{ t.oncomplete=res; t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('tx aborted')); }); }
+
+/** attach derived/normalized search keys to a record */
+function deriveKeys(r){
+  r.nidNorm  = normId(r.nationalId);
+  r.phoneNorm= normPhone(r.phone);
+  r.nameKey  = phoneticKey(fullNameOf(r));
+  r.dob      = normDate(r.dob);
+  r.regDate  = normDate(r.regDate);
+  return r;
+}
+async function putRecords(records){ // bulk insert, one transaction
+  const t = await tx(['beneficiaries'],'readwrite');
+  const st = t.objectStore('beneficiaries');
+  for(const r of records) st.put(r);
+  await txDone(t);
+}
+async function countRecords(){
+  const t = await tx(['beneficiaries'],'readonly');
+  return reqP(t.objectStore('beneficiaries').count());
+}
+async function getRecord(id){
+  const t = await tx(['beneficiaries'],'readonly');
+  return reqP(t.objectStore('beneficiaries').get(id));
+}
+async function getRecords(ids){
+  const t = await tx(['beneficiaries'],'readonly');
+  const st = t.objectStore('beneficiaries');
+  return Promise.all(ids.map(id=>reqP(st.get(id))));
+}
+async function deleteRecord(id){
+  const t = await tx(['beneficiaries'],'readwrite');
+  t.objectStore('beneficiaries').delete(id);
+  await txDone(t);
+}
+async function metaGet(key){ const t=await tx(['meta'],'readonly'); const v=await reqP(t.objectStore('meta').get(key)); return v?v.value:null; }
+async function metaSet(key,value){ const t=await tx(['meta'],'readwrite'); t.objectStore('meta').put({key,value}); await txDone(t); }
+
+/** stream all records in chunks through cb(chunkArray); returns total */
+async function eachChunk(chunkSize, cb){
+  const db = await openDB();
+  return new Promise((res,rej)=>{
+    const t = db.transaction(['beneficiaries'],'readonly');
+    const st = t.objectStore('beneficiaries');
+    let buf=[], total=0;
+    const cur = st.openCursor();
+    cur.onerror = ()=>rej(cur.error);
+    cur.onsuccess = e=>{
+      const c = e.target.result;
+      if(c){
+        buf.push(c.value); total++;
+        if(buf.length>=chunkSize){ cb(buf); buf=[]; }
+        c.continue();
+      } else {
+        if(buf.length) cb(buf);
+        res(total);
+      }
+    };
+  });
+}
+
+/* ---------------- duplicate scan worker ---------------- */
+const WORKER_SRC = NORM_SRC + `
+var rows = [];
+function locOf(r){ return r.kb||''; }
+function scorePair(a,b){
+  var reasons=[], s=0, w=0;
+  var ns = tokenSim(a.nk, b.nk);
+  s += ns*0.35; w += 0.35;
+  if(ns>0.92) reasons.push('same/similar name');
+  if(a.dob && b.dob){
+    var ds = a.dob===b.dob ? 1 : (a.dob.slice(0,7)===b.dob.slice(0,7) ? 0.7 : (a.dob.slice(0,4)===b.dob.slice(0,4) ? 0.45 : 0));
+    s += ds*0.20; w += 0.20;
+    if(ds===1) reasons.push('same date of birth');
+  }
+  if(a.nid && b.nid){
+    var is = a.nid===b.nid ? 1 : 0;
+    s += is*0.20; w += 0.20;
+    if(is) reasons.push('same national ID');
+  }
+  if(a.ph && b.ph){
+    var ps = a.ph===b.ph ? 1 : 0;
+    s += ps*0.15; w += 0.15;
+    if(ps) reasons.push('same phone');
+  }
+  if(a.sex && b.sex){ s += (a.sex===b.sex?1:0)*0.05; w += 0.05; }
+  if(a.loc && b.loc){ s += (a.loc===b.loc?1:0)*0.05; w += 0.05; }
+  var score = w ? s/w : 0;
+  /* evidence scaling: when few fields are comparable (missing data), a perfect
+     agreement on what little exists must not read as near-certainty */
+  score *= 0.6 + 0.4*Math.min(1, w);
+  /* hard contradictions are strong evidence of two different people */
+  if(a.dob && b.dob && a.dob.slice(0,4)!==b.dob.slice(0,4)) score *= 0.85;
+  if(a.nid && b.nid && a.nid!==b.nid) score *= 0.8;
+  if(a.nid && b.nid && a.nid===b.nid && score<0.95) score = 0.95; /* identical national ID is decisive */
+  return { score: score, reasons: reasons };
+}
+/* union-find */
+var parent = {};
+function find(x){ var r=x; while(parent[r]!==r) r=parent[r]; while(parent[x]!==r){ var n=parent[x]; parent[x]=r; x=n; } return r; }
+function union(a,b){ if(!(a in parent)) parent[a]=a; if(!(b in parent)) parent[b]=b; var ra=find(a), rb=find(b); if(ra!==rb) parent[rb]=ra; }
+
+onmessage = function(e){
+  var msg = e.data;
+  if(msg.type==='add'){ rows = rows.concat(msg.rows); return; }
+  if(msg.type!=='run') return;
+  var cfg = msg.cfg;
+  var n = rows.length;
+  var byId = {};
+  for(var i=0;i<n;i++) byId[rows[i].id] = rows[i];
+
+  /* ---- build blocks ---- */
+  var blocks = { name:{}, dob:{}, phone:{}, nid:{} };
+  function push(map,key,id){ if(!key) return; (map[key]||(map[key]=[])).push(id); }
+  for(var i2=0;i2<n;i2++){
+    var r = rows[i2];
+    push(blocks.name, r.sx, r.id);
+    push(blocks.dob, r.dob, r.id);
+    push(blocks.phone, r.ph, r.id);
+    push(blocks.nid, r.nid, r.id);
+  }
+
+  var pairScores = {};   /* "a_b" -> already compared */
+  var edges = [];        /* strong links: clustered transitively */
+  var weak = [];         /* possible links: reported as standalone pairs, never chained */
+  var skippedBlocks = 0, pairsScored = 0;
+
+  /* exact national-ID blocks: all members are duplicates by definition */
+  for(var key in blocks.nid){
+    var ids = blocks.nid[key];
+    if(ids.length<2) continue;
+    ids.sort(function(a,b){return a-b;});
+    for(var j=1;j<ids.length;j++){
+      union(ids[0], ids[j]);
+      edges.push([ids[0], ids[j], 0.99, ['same national ID']]);
+    }
+  }
+
+  function processBlock(ids, cap){
+    if(ids.length<2) return;
+    if(ids.length>cap){ skippedBlocks++; return; }
+    ids.sort(function(a,b){return a-b;});
+    for(var x=0;x<ids.length-1;x++){
+      for(var y=x+1;y<ids.length;y++){
+        var k = ids[x]+'_'+ids[y];
+        if(pairScores[k]) continue;
+        var res = scorePair(byId[ids[x]], byId[ids[y]]);
+        pairScores[k] = true;
+        pairsScored++;
+        if(res.score >= cfg.thHigh){
+          /* strong evidence: safe to merge transitively */
+          union(ids[x], ids[y]);
+          edges.push([ids[x], ids[y], res.score, res.reasons]);
+        } else if(res.score >= cfg.thLow){
+          /* weak evidence: keep as an isolated pair to avoid chaining
+             unrelated people into one giant group */
+          weak.push([ids[x], ids[y], res.score, res.reasons]);
+        }
+      }
+    }
+  }
+
+  var blockSets = [
+    ['name', blocks.name, cfg.maxBlock],
+    ['dob', blocks.dob, cfg.maxBlock],
+    ['phone', blocks.phone, cfg.maxBlock]
+  ];
+  var totalBlocks = 0;
+  for(var b=0;b<blockSets.length;b++) totalBlocks += Object.keys(blockSets[b][1]).length;
+  var doneBlocks = 0, lastPost = 0;
+  for(var b2=0;b2<blockSets.length;b2++){
+    var map = blockSets[b2][1], cap = blockSets[b2][2];
+    for(var k2 in map){
+      processBlock(map[k2], cap);
+      doneBlocks++;
+      var now = Date.now();
+      if(now-lastPost>200){ lastPost=now; postMessage({type:'progress', done:doneBlocks, total:totalBlocks, pairs:pairsScored}); }
+    }
+  }
+
+  /* ---- collect groups ---- */
+  var groupsByRoot = {};
+  for(var e2=0;e2<edges.length;e2++){
+    var ed = edges[e2];
+    var root = find(ed[0]);
+    var g = groupsByRoot[root] || (groupsByRoot[root] = {members:{}, score:0, reasons:{}});
+    g.members[ed[0]] = 1; g.members[ed[1]] = 1;
+    if(ed[2] > g.score) g.score = ed[2];
+    for(var rr=0; rr<ed[3].length; rr++) g.reasons[ed[3][rr]] = 1;
+  }
+  var groups = [];
+  for(var root2 in groupsByRoot){
+    var gg = groupsByRoot[root2];
+    var members = Object.keys(gg.members).map(Number).sort(function(a,b){return a-b;});
+    if(members.length>=2) groups.push({ members: members, score: Math.round(gg.score*100)/100, reasons: Object.keys(gg.reasons) });
+  }
+  /* weak pairs become their own 2-record groups unless already covered by a strong group */
+  function sameStrong(a,b){ return (a in parent) && (b in parent) && find(a)===find(b); }
+  for(var wp=0; wp<weak.length; wp++){
+    var W = weak[wp];
+    if(sameStrong(W[0],W[1])) continue;
+    groups.push({ members:[W[0],W[1]], score: Math.round(W[2]*100)/100, reasons: W[3] });
+  }
+  groups.sort(function(a,b){ return b.score-a.score || b.members.length-a.members.length; });
+  postMessage({type:'done', groups:groups, stats:{records:n, pairs:pairsScored, skippedBlocks:skippedBlocks}});
+  rows = []; parent = {};
+};
+`;
+
+/* ---------------- tabs ---------------- */
+$('#nav').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  $$('#nav button').forEach(x=>x.classList.toggle('active', x===b));
+  $$('main > section').forEach(s=>s.classList.add('hidden'));
+  $('#tab-'+b.dataset.tab).classList.remove('hidden');
+  if(b.dataset.tab==='dashboard') refreshDashboard();
+  if(b.dataset.tab==='browse') loadPage(0);
+  if(b.dataset.tab==='dups') renderDupList();
+});
+
+/* ---------------- dashboard ---------------- */
+async function refreshDashboard(){
+  $('#st-total').textContent = fmtN(await countRecords());
+  const scan = await metaGet('lastScan');
+  if(scan){
+    $('#st-groups').textContent = fmtN(scan.groups);
+    $('#st-dup-records').textContent = fmtN(scan.dupRecords);
+    $('#st-last-scan').textContent = new Date(scan.at).toLocaleString();
+  } else {
+    $('#st-groups').textContent = '–';
+    $('#st-dup-records').textContent = '–';
+    $('#st-last-scan').textContent = 'never';
+  }
+}
+
+/* ---------------- registration + live duplicate check ---------------- */
+const REG_FIELDS = ['code','firstName','middleName','lastName','sex','dob','nationalId','phone','householdId','householdSize','region','zone','woreda','kebele','program','regDate','notes'];
+let pendingRecord = null;
+let editingId = null;
+
+function readRegForm(){
+  const f = $('#reg-form');
+  const r = {};
+  REG_FIELDS.forEach(k=>r[k]=f.elements[k].value.trim());
+  return deriveKeys(r);
+}
+function projOf(r){
+  return { id:r.id||0, nk:sortedNameOf(r), sx:r.nameKey, dob:r.dob, sex:(r.sex||'').toUpperCase()[0]||'', ph:r.phoneNorm, nid:r.nidNorm, loc:normName((r.woreda||'')+' '+(r.kebele||'')) };
+}
+function scorePairMain(a,b,cfg){
+  // mirror of the worker's scorePair for the live check
+  let reasons=[], s=0, w=0;
+  const ns=tokenSim(a.nk,b.nk); s+=ns*0.35; w+=0.35; if(ns>0.92)reasons.push('same/similar name');
+  if(a.dob&&b.dob){ const ds=a.dob===b.dob?1:(a.dob.slice(0,7)===b.dob.slice(0,7)?0.7:(a.dob.slice(0,4)===b.dob.slice(0,4)?0.45:0)); s+=ds*0.20;w+=0.20; if(ds===1)reasons.push('same date of birth'); }
+  if(a.nid&&b.nid){ const is=a.nid===b.nid?1:0; s+=is*0.20;w+=0.20; if(is)reasons.push('same national ID'); }
+  if(a.ph&&b.ph){ const ps=a.ph===b.ph?1:0; s+=ps*0.15;w+=0.15; if(ps)reasons.push('same phone'); }
+  if(a.sex&&b.sex){ s+=(a.sex===b.sex?1:0)*0.05; w+=0.05; }
+  if(a.loc&&b.loc){ s+=(a.loc===b.loc?1:0)*0.05; w+=0.05; }
+  let score=w?s/w:0;
+  score *= 0.6 + 0.4*Math.min(1, w);
+  if(a.dob&&b.dob&&a.dob.slice(0,4)!==b.dob.slice(0,4)) score*=0.85;
+  if(a.nid&&b.nid&&a.nid!==b.nid) score*=0.8;
+  if(a.nid&&b.nid&&a.nid===b.nid&&score<0.95)score=0.95;
+  return {score,reasons};
+}
+async function findLiveCandidates(rec){
+  const t = await tx(['beneficiaries'],'readonly');
+  const st = t.objectStore('beneficiaries');
+  const seen = new Map();
+  async function collect(indexName, key){
+    if(!key) return;
+    const rows = await reqP(st.index(indexName).getAll(key, 200));
+    rows.forEach(r=>{ if(r.id!==editingId) seen.set(r.id, r); });
+  }
+  await collect('nidNorm', rec.nidNorm);
+  await collect('phoneNorm', rec.phoneNorm);
+  await collect('nameKey', rec.nameKey);
+  const cfg = getSettings();
+  const p = projOf(rec);
+  const out = [];
+  for(const r of seen.values()){
+    const {score,reasons} = scorePairMain(p, projOf(r), cfg);
+    if(score >= cfg.thLow) out.push({r, score, reasons});
+  }
+  out.sort((a,b)=>b.score-a.score);
+  return out.slice(0,20);
+}
+async function saveRecord(rec){
+  if(editingId) rec.id = editingId;
+  rec.created = rec.created || new Date().toISOString();
+  await putRecords([rec]);
+  const wasEdit = !!editingId;
+  editingId = null;
+  $('#reg-title').textContent = 'Register a beneficiary';
+  $('#reg-form').reset();
+  $('#reg-dup-panel').classList.add('hidden');
+  pendingRecord = null;
+  toast(wasEdit ? 'Beneficiary updated.' : 'Beneficiary saved.');
+}
+$('#reg-form').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const rec = readRegForm();
+  if(!rec.firstName){ toast('First name is required'); return; }
+  $('#reg-save').disabled = true;
+  try{
+    const cands = await findLiveCandidates(rec);
+    if(cands.length){
+      pendingRecord = rec;
+      const cfg = getSettings();
+      $('#reg-dup-msg').innerHTML = `<b>${cands.length}</b> possible duplicate${cands.length>1?'s':''} found for this person. Review before saving.`;
+      $('#reg-dup-table').innerHTML = candTable(cands, cfg);
+      $('#reg-dup-panel').classList.remove('hidden');
+      $('#reg-dup-panel').scrollIntoView({behavior:'smooth'});
+    } else {
+      await saveRecord(rec);
+    }
+  } finally { $('#reg-save').disabled = false; }
+});
+function candTable(cands, cfg){
+  const rows = cands.map(({r,score,reasons})=>`
+    <tr><td>${badge(score,cfg)}</td><td>${r.id}</td><td>${esc(r.code)}</td><td><b>${esc(fullNameOf(r))}</b></td>
+    <td>${esc(r.sex)}</td><td>${esc(r.dob)}</td><td>${esc(r.nationalId)}</td><td>${esc(r.phone)}</td>
+    <td>${esc(r.woreda)} ${esc(r.kebele)}</td><td class="muted">${esc(reasons.join(', '))}</td></tr>`).join('');
+  return `<table><thead><tr><th>Match</th><th>ID</th><th>Code</th><th>Name</th><th>Sex</th><th>DOB</th><th>National ID</th><th>Phone</th><th>Location</th><th>Why flagged</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function badge(score,cfg){
+  const pct = Math.round(score*100)+'%';
+  if(score>=cfg.thHigh) return `<span class="badge high">${pct} probable</span>`;
+  return `<span class="badge mid">${pct} possible</span>`;
+}
+$('#reg-save-anyway').addEventListener('click', async ()=>{ if(pendingRecord) await saveRecord(pendingRecord); });
+$('#reg-cancel-save').addEventListener('click', ()=>{ pendingRecord=null; $('#reg-dup-panel').classList.add('hidden'); });
+$('#reg-clear').addEventListener('click', ()=>{
+  editingId=null; pendingRecord=null;
+  $('#reg-title').textContent='Register a beneficiary';
+  $('#reg-form').reset(); $('#reg-dup-panel').classList.add('hidden');
+});
+
+/* ---------------- browse / search ---------------- */
+const PAGE = 50;
+let pageStack = [];       // lower-bound keys of previous pages
+let curLowerBound = null; // exclusive lower bound of the current page
+let searchMode = null;    // null | {type:'name'|'id'|'phone', q}
+
+async function loadPage(direction){ // -1 prev, 0 reset/current, 1 next handled via lastKey
+  if(direction===0){ pageStack=[]; curLowerBound=null; }
+  const db = await openDB();
+  const t = db.transaction(['beneficiaries'],'readonly');
+  const st = t.objectStore('beneficiaries');
+  const tbody = $('#browse-table tbody');
+  const rows = [];
+  let lastKey = null;
+  const range = curLowerBound!=null ? IDBKeyRange.lowerBound(curLowerBound, true) : null;
+
+  await new Promise((res,rej)=>{
+    let scanned = 0;
+    const cur = st.openCursor(range);
+    cur.onerror = ()=>rej(cur.error);
+    cur.onsuccess = e=>{
+      const c = e.target.result;
+      if(!c || rows.length>=PAGE){ res(); return; }
+      scanned++;
+      const r = c.value;
+      let keep = true;
+      if(searchMode){
+        if(searchMode.type==='name') keep = sortedNameOf(r).includes(searchMode.q) || normName(fullNameOf(r)).includes(searchMode.q);
+        else if(searchMode.type==='id') keep = r.nidNorm===searchMode.q;
+        else if(searchMode.type==='phone') keep = r.phoneNorm===searchMode.q;
+      }
+      if(keep){ rows.push(r); lastKey = c.key; }
+      if(searchMode && scanned>200000 && rows.length===0){ res(); return; } // cap fruitless scans
+      c.continue();
+    };
+  });
+
+  tbody.innerHTML = rows.map(r=>`
+    <tr data-id="${r.id}">
+      <td class="mono">${r.id}</td><td>${esc(r.code)}</td><td><b>${esc(fullNameOf(r))}</b></td>
+      <td>${esc(r.sex)}</td><td>${esc(r.dob)}</td><td>${esc(r.nationalId)}</td><td>${esc(r.phone)}</td>
+      <td>${esc(r.woreda)}</td><td>${esc(r.kebele)}</td><td>${esc(r.program)}</td>
+      <td class="row" style="flex-wrap:nowrap">
+        <button class="btn small secondary act-edit">Edit</button>
+        <button class="btn small ghost-danger act-del">Delete</button>
+      </td>
+    </tr>`).join('') || `<tr><td colspan="11" class="muted">No records${searchMode?' matching the search':''}.</td></tr>`;
+
+  $('#pg-info').textContent = rows.length ? `showing ${rows.length} record${rows.length>1?'s':''}${searchMode?' (filtered)':''}` : '';
+  $('#pg-prev').disabled = pageStack.length===0;
+  $('#pg-next').disabled = rows.length<PAGE;
+  loadPage._lastKey = lastKey;
+}
+$('#pg-next').addEventListener('click', ()=>{
+  if(loadPage._lastKey==null) return;
+  pageStack.push(curLowerBound);
+  curLowerBound = loadPage._lastKey;
+  loadPage(1);
+});
+$('#pg-prev').addEventListener('click', ()=>{
+  if(!pageStack.length) return;
+  curLowerBound = pageStack.pop();
+  loadPage(1);
+});
+$('#btn-search').addEventListener('click', ()=>{
+  const name = normName($('#q-name').value), nid = normId($('#q-id').value), ph = normPhone($('#q-phone').value);
+  if(nid) searchMode={type:'id',q:nid};
+  else if(ph) searchMode={type:'phone',q:ph};
+  else if(name) searchMode={type:'name',q:name};
+  else searchMode=null;
+  loadPage(0);
+});
+$('#btn-search-clear').addEventListener('click', ()=>{ searchMode=null; $('#q-name').value=$('#q-id').value=$('#q-phone').value=''; loadPage(0); });
+$('#browse-table').addEventListener('click', async e=>{
+  const tr = e.target.closest('tr[data-id]'); if(!tr) return;
+  const id = +tr.dataset.id;
+  if(e.target.classList.contains('act-del')){
+    if(!confirm('Delete record #'+id+'? This cannot be undone.')) return;
+    await deleteRecord(id);
+    toast('Record deleted.');
+    loadPage(1);
+  } else if(e.target.classList.contains('act-edit')){
+    const r = await getRecord(id); if(!r) return;
+    editingId = id;
+    const f = $('#reg-form');
+    REG_FIELDS.forEach(k=>{ if(f.elements[k]) f.elements[k].value = r[k]||''; });
+    $('#reg-title').textContent = 'Edit beneficiary #'+id;
+    $$('#nav button').forEach(x=>x.classList.toggle('active', x.dataset.tab==='register'));
+    $$('main > section').forEach(s=>s.classList.add('hidden'));
+    $('#tab-register').classList.remove('hidden');
+  }
+});
+
+/* ---------------- CSV parsing (streaming) ---------------- */
+function parseCSVChunk(state, text, onRow){
+  // state: {buf, field, row, inQ, delim}
+  let {field, row, inQ} = state;
+  const d = state.delim;
+  for(let i=0;i<text.length;i++){
+    const ch = text[i];
+    if(inQ){
+      if(ch==='"'){
+        if(text[i+1]==='"'){ field+='"'; i++; }
+        else inQ=false;
+      } else field+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===d){ row.push(field); field=''; }
+      else if(ch==='\n'){ row.push(field); field=''; if(row.length>1||row[0]!=='') onRow(row); row=[]; }
+      else if(ch==='\r'){ /* skip */ }
+      else field+=ch;
+    }
+  }
+  state.field=field; state.row=row; state.inQ=inQ;
+}
+function csvFlush(state, onRow){
+  if(state.field!=='' || state.row.length){ state.row.push(state.field); if(state.row.length>1||state.row[0]!=='') onRow(state.row); state.field=''; state.row=[]; }
+}
+function detectDelim(headerLine){
+  const c = {',':0,';':0,'\t':0,'|':0};
+  for(const ch of headerLine) if(ch in c) c[ch]++;
+  return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0] || ',';
+}
+function csvEscape(v){
+  v = String(v==null?'':v);
+  return /[",\n\r]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v;
+}
+
+/* ---------------- import ---------------- */
+const IMPORT_TARGETS = [
+  ['code','Beneficiary code / Reg. no.', /\b(code|reg(istration)?[ _-]?(no|num|id)|ben(ef)?[ _-]?id)\b/i],
+  ['firstName','First name', /first|given/i],
+  ['middleName',"Father's / middle name", /father|middle/i],
+  ['lastName',"Grandfather's / last name", /grand|last|sur|family/i],
+  ['sex','Sex', /^sex$|gender/i],
+  ['dob','Date of birth', /birth|dob/i],
+  ['nationalId','National ID', /national|nid|id[ _-]?(no|num|number)|fayda/i],
+  ['phone','Phone', /phone|mobile|tel/i],
+  ['householdId','Household ID', /household[ _-]?(id|no|num)|hh[ _-]?id/i],
+  ['householdSize','Household size', /size|members/i],
+  ['region','Region', /region|state|province/i],
+  ['zone','Zone', /zone/i],
+  ['woreda','Woreda / District', /woreda|district/i],
+  ['kebele','Kebele / Village', /kebele|village|ward/i],
+  ['program','Program / Project', /program|project|activity/i],
+  ['regDate','Registration date', /reg.*date|date.*reg|enrol/i],
+  ['notes','Notes', /note|remark|comment/i],
+];
+let importFile = null, importHeader = null, importDelim = ',';
+
+$('#csv-file').addEventListener('change', async e=>{
+  importFile = e.target.files[0];
+  if(!importFile) return;
+  const head = await importFile.slice(0, 256*1024).text();
+  const firstNL = head.indexOf('\n');
+  importDelim = detectDelim(firstNL>0 ? head.slice(0,firstNL) : head);
+  const state = {field:'',row:[],inQ:false,delim:importDelim};
+  const rows = [];
+  parseCSVChunk(state, head, r=>{ if(rows.length<6) rows.push(r); });
+  if(!rows.length){ toast('Could not read the file.'); return; }
+  importHeader = rows[0].map(h=>h.trim());
+  const samples = rows.slice(1);
+  const tbody = $('#map-table tbody');
+  tbody.innerHTML = IMPORT_TARGETS.map(([key,label,rx])=>{
+    let guess = importHeader.findIndex(h=>rx.test(h));
+    const opts = ['<option value="-1">— skip —</option>']
+      .concat(importHeader.map((h,i)=>`<option value="${i}" ${i===guess?'selected':''}>${esc(h)}</option>`)).join('');
+    const sample = guess>=0 ? samples.map(s=>s[guess]).filter(Boolean).slice(0,3).join(' · ') : '';
+    return `<tr><td><b>${esc(label)}</b></td><td><select data-key="${key}">${opts}</select></td><td class="muted mono" data-sample="${key}">${esc(sample)}</td></tr>`;
+  }).join('');
+  tbody.addEventListener('change', ev=>{
+    const sel = ev.target.closest('select'); if(!sel) return;
+    const i = +sel.value;
+    const cell = tbody.querySelector(`[data-sample="${sel.dataset.key}"]`);
+    cell.textContent = i>=0 ? samples.map(s=>s[i]).filter(Boolean).slice(0,3).join(' · ') : '';
+  });
+  $('#map-panel').classList.remove('hidden');
+  $('#import-rowcount').textContent = `File: ${importFile.name} (${(importFile.size/1048576).toFixed(1)} MB)`;
+  $('#import-done').innerHTML='';
+});
+
+$('#btn-import').addEventListener('click', async ()=>{
+  if(!importFile) return;
+  const mapping = {};
+  $$('#map-table select').forEach(s=>{ const i=+s.value; if(i>=0) mapping[s.dataset.key]=i; });
+  if(mapping.firstName==null && mapping.code==null && mapping.nationalId==null){
+    toast('Map at least a name, code or ID column.'); return;
+  }
+  $('#btn-import').disabled = true;
+  $('#import-prog-wrap').classList.remove('hidden');
+  const t0 = Date.now();
+  let imported = 0, headerSkipped = false, batch = [];
+  const state = {field:'',row:[],inQ:false,delim:importDelim};
+  const onRow = row=>{
+    if(!headerSkipped){ headerSkipped=true; return; }
+    const rec = {};
+    for(const [key,idx] of Object.entries(mapping)) rec[key] = (row[idx]||'').trim();
+    deriveKeys(rec);
+    rec.created = rec.created || new Date().toISOString();
+    batch.push(rec);
+  };
+  const reader = importFile.stream().getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  try{
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      bytes += value.byteLength;
+      parseCSVChunk(state, decoder.decode(value,{stream:true}), onRow);
+      if(batch.length>=4000){
+        await putRecords(batch); imported += batch.length; batch=[];
+        const pct = Math.min(100, Math.round(bytes/importFile.size*100));
+        $('#import-prog').style.width = pct+'%';
+        $('#import-status').textContent = `${fmtN(imported)} records imported… (${pct}%)`;
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+    parseCSVChunk(state, decoder.decode(), onRow);
+    csvFlush(state, onRow);
+    if(batch.length){ await putRecords(batch); imported += batch.length; }
+    $('#import-prog').style.width = '100%';
+    const secs = ((Date.now()-t0)/1000).toFixed(1);
+    $('#import-status').textContent = '';
+    $('#import-done').innerHTML = `<div class="alert ok"><b>${fmtN(imported)}</b> records imported in ${secs}s. Total in registry: <b>${fmtN(await countRecords())}</b>. Now run a scan in the <b>Duplicates</b> tab.</div>`;
+  } catch(err){
+    $('#import-done').innerHTML = `<div class="alert danger">Import failed after ${fmtN(imported)} records: ${esc(err.message||err)}</div>`;
+  } finally {
+    $('#btn-import').disabled = false;
+  }
+});
+
+/* ---------------- duplicate scan ---------------- */
+let scanning = false;
+async function runScan(){
+  if(scanning) return;
+  const total = await countRecords();
+  if(total<2){ toast('Nothing to scan yet — add or import records first.'); return; }
+  scanning = true;
+  $('#btn-scan').disabled = true;
+  $('#scan-prog-wrap').classList.remove('hidden');
+  $('#scan-status').textContent = 'Loading records…';
+  $('#scan-summary').innerHTML = '';
+  const cfg = getSettings();
+  const worker = new Worker(URL.createObjectURL(new Blob([WORKER_SRC],{type:'text/javascript'})));
+  let loaded = 0;
+  await eachChunk(5000, chunk=>{
+    const rows = chunk.map(projOf);
+    worker.postMessage({type:'add', rows});
+    loaded += chunk.length;
+    $('#scan-prog').style.width = Math.round(loaded/total*30)+'%';
+    $('#scan-status').textContent = `Loading records… ${fmtN(loaded)} / ${fmtN(total)}`;
+  });
+  $('#scan-status').textContent = 'Comparing records…';
+  const result = await new Promise(res=>{
+    worker.onmessage = e=>{
+      const m = e.data;
+      if(m.type==='progress'){
+        $('#scan-prog').style.width = (30+Math.round(m.done/Math.max(1,m.total)*70))+'%';
+        $('#scan-status').textContent = `Comparing… block ${fmtN(m.done)} / ${fmtN(m.total)} — ${fmtN(m.pairs)} pairs checked`;
+      } else if(m.type==='done') res(m);
+    };
+    worker.postMessage({type:'run', cfg});
+  });
+  worker.terminate();
+
+  // persist groups
+  const t = await tx(['dupGroups'],'readwrite');
+  const st = t.objectStore('dupGroups');
+  st.clear();
+  let dupRecords = 0;
+  for(const g of result.groups){ dupRecords += g.members.length; st.put({members:g.members, score:g.score, reasons:g.reasons, reviewed:false}); }
+  await txDone(t);
+  await metaSet('lastScan', {at:new Date().toISOString(), groups:result.groups.length, dupRecords, records:result.stats.records, pairs:result.stats.pairs, skippedBlocks:result.stats.skippedBlocks});
+
+  $('#scan-prog').style.width='100%';
+  $('#scan-status').textContent='';
+  const s = result.stats;
+  $('#scan-summary').innerHTML = `<div class="alert ${result.groups.length?'warn':'ok'}">
+    Scanned <b>${fmtN(s.records)}</b> records (${fmtN(s.pairs)} candidate pairs compared).
+    Found <b>${fmtN(result.groups.length)}</b> duplicate group${result.groups.length===1?'':'s'} involving <b>${fmtN(dupRecords)}</b> records.
+    ${s.skippedBlocks?`<br><span class="muted">${fmtN(s.skippedBlocks)} very large name blocks were skipped (raise the block cap in Settings to include them).</span>`:''}
+  </div>`;
+  scanning = false;
+  $('#btn-scan').disabled = false;
+  dupPage = 0;
+  renderDupList();
+  refreshDashboard();
+}
+$('#btn-scan').addEventListener('click', runScan);
+
+/* ---------------- duplicate group list ---------------- */
+const DUP_PAGE = 30;
+let dupPage = 0;
+async function getAllGroups(){
+  const t = await tx(['dupGroups'],'readonly');
+  const all = await reqP(t.objectStore('dupGroups').getAll());
+  all.sort((a,b)=>b.score-a.score || b.members.length-a.members.length);
+  return all;
+}
+async function renderDupList(){
+  const cfg = getSettings();
+  $('#scan-config-note').textContent = `thresholds: probable ≥ ${cfg.thHigh}, possible ≥ ${cfg.thLow}`;
+  let groups = await getAllGroups();
+  if($('#hide-reviewed').checked) groups = groups.filter(g=>!g.reviewed);
+  const totalPages = Math.max(1, Math.ceil(groups.length/DUP_PAGE));
+  dupPage = Math.min(dupPage, totalPages-1);
+  const slice = groups.slice(dupPage*DUP_PAGE, (dupPage+1)*DUP_PAGE);
+  const host = $('#dup-list');
+  if(!groups.length){
+    host.innerHTML = '<p class="muted">No duplicate groups. Run a scan (or all groups are hidden as reviewed).</p>';
+  } else {
+    const memberIds = slice.flatMap(g=>g.members);
+    const recs = await getRecords(memberIds);
+    const byId = new Map(recs.filter(Boolean).map(r=>[r.id,r]));
+    host.innerHTML = slice.map(g=>{
+      const rows = g.members.map(id=>{
+        const r = byId.get(id);
+        if(!r) return `<tr><td colspan="10" class="muted">record #${id} was deleted</td></tr>`;
+        return `<tr><td class="mono">${r.id}</td><td>${esc(r.code)}</td><td><b>${esc(fullNameOf(r))}</b></td><td>${esc(r.sex)}</td><td>${esc(r.dob)}</td><td>${esc(r.nationalId)}</td><td>${esc(r.phone)}</td><td>${esc(r.householdId)}</td><td>${esc([r.region,r.zone,r.woreda,r.kebele].filter(Boolean).join(' / '))}</td>
+          <td><button class="btn small ghost-danger g-del" data-gid="${g.gid}" data-id="${r.id}">Delete</button></td></tr>`;
+      }).join('');
+      return `<details class="dup-group" ${slice.length<=5?'open':''}>
+        <summary>
+          ${badge(g.score,cfg)}
+          <b>${g.members.length} records</b>
+          <span class="muted">${esc((g.reasons||[]).join(', '))||'similar overall profile'}</span>
+          ${g.reviewed?'<span class="badge ok">reviewed</span>':''}
+          <span style="flex:1"></span>
+          <button class="btn small secondary g-rev" data-gid="${g.gid}">${g.reviewed?'Mark unreviewed':'Mark reviewed'}</button>
+        </summary>
+        <div class="dup-body"><table>
+          <thead><tr><th>ID</th><th>Code</th><th>Name</th><th>Sex</th><th>DOB</th><th>National ID</th><th>Phone</th><th>Household</th><th>Location</th><th></th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+      </details>`;
+    }).join('');
+  }
+  $('#dpg-info').textContent = groups.length? `page ${dupPage+1} of ${totalPages} — ${fmtN(groups.length)} groups` : '';
+  $('#dpg-prev').disabled = dupPage===0;
+  $('#dpg-next').disabled = dupPage>=totalPages-1;
+}
+$('#dpg-prev').addEventListener('click',()=>{ dupPage--; renderDupList(); });
+$('#dpg-next').addEventListener('click',()=>{ dupPage++; renderDupList(); });
+$('#hide-reviewed').addEventListener('change',()=>{ dupPage=0; renderDupList(); });
+$('#dup-list').addEventListener('click', async e=>{
+  const rev = e.target.closest('.g-rev');
+  if(rev){
+    e.preventDefault();
+    const gid = +rev.dataset.gid;
+    const t = await tx(['dupGroups'],'readwrite');
+    const st = t.objectStore('dupGroups');
+    const g = await reqP(st.get(gid));
+    if(g){ g.reviewed = !g.reviewed; st.put(g); }
+    await txDone(t);
+    renderDupList();
+    return;
+  }
+  const del = e.target.closest('.g-del');
+  if(del){
+    const id = +del.dataset.id, gid = +del.dataset.gid;
+    if(!confirm('Delete record #'+id+' from the registry? This cannot be undone.')) return;
+    await deleteRecord(id);
+    const t = await tx(['dupGroups'],'readwrite');
+    const st = t.objectStore('dupGroups');
+    const g = await reqP(st.get(gid));
+    if(g){
+      g.members = g.members.filter(m=>m!==id);
+      if(g.members.length<2) st.delete(gid); else st.put(g);
+    }
+    await txDone(t);
+    toast('Record deleted.');
+    renderDupList();
+    refreshDashboard();
+  }
+});
+
+/* ---------------- exports ---------------- */
+const EXPORT_COLS = ['id','code','firstName','middleName','lastName','sex','dob','nationalId','phone','householdId','householdSize','region','zone','woreda','kebele','program','regDate','notes','created'];
+function download(name, parts){
+  const blob = new Blob(parts, {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+$('#btn-export-all').addEventListener('click', async ()=>{
+  const parts = [EXPORT_COLS.join(',')+'\n'];
+  let buf = [];
+  const total = await eachChunk(5000, chunk=>{
+    for(const r of chunk) buf.push(EXPORT_COLS.map(c=>csvEscape(r[c])).join(','));
+    parts.push(buf.join('\n')+'\n'); buf=[];
+  });
+  if(!total){ toast('No records to export.'); return; }
+  download('beneficiaries-export-'+new Date().toISOString().slice(0,10)+'.csv', parts);
+  toast(fmtN(total)+' records exported.');
+});
+$('#btn-export-dups').addEventListener('click', async ()=>{
+  const groups = await getAllGroups();
+  if(!groups.length){ toast('No duplicate groups — run a scan first.'); return; }
+  const header = ['group','matchScore','matchReasons','reviewed'].concat(EXPORT_COLS);
+  const lines = [header.join(',')+'\n'];
+  let gnum = 0;
+  for(const g of groups){
+    gnum++;
+    const recs = await getRecords(g.members);
+    for(const r of recs){
+      if(!r) continue;
+      lines.push([gnum, g.score, csvEscape((g.reasons||[]).join('; ')), g.reviewed?'yes':'no']
+        .concat(EXPORT_COLS.map(c=>csvEscape(r[c]))).join(',')+'\n');
+    }
+  }
+  download('duplicate-report-'+new Date().toISOString().slice(0,10)+'.csv', lines);
+  toast('Duplicate report exported ('+fmtN(gnum)+' groups).');
+});
+
+/* ---------------- settings tab ---------------- */
+function loadSettingsUI(){
+  const s = getSettings();
+  $('#set-th-high').value = s.thHigh;
+  $('#set-th-low').value = s.thLow;
+  $('#set-maxblock').value = s.maxBlock;
+}
+$('#btn-save-settings').addEventListener('click', ()=>{
+  const s = {
+    thHigh: Math.min(1, Math.max(0.5, parseFloat($('#set-th-high').value)||DEFAULT_SETTINGS.thHigh)),
+    thLow: Math.min(1, Math.max(0.3, parseFloat($('#set-th-low').value)||DEFAULT_SETTINGS.thLow)),
+    maxBlock: Math.min(5000, Math.max(50, parseInt($('#set-maxblock').value)||DEFAULT_SETTINGS.maxBlock)),
+  };
+  if(s.thLow > s.thHigh) s.thLow = s.thHigh;
+  saveSettings(s); loadSettingsUI(); toast('Settings saved. Re-run the scan to apply.');
+});
+$('#btn-wipe').addEventListener('click', async ()=>{
+  if(!confirm('Delete ALL beneficiaries and scan results stored on this computer? This cannot be undone.')) return;
+  if(!confirm('Are you absolutely sure? Consider exporting a CSV backup first.')) return;
+  const t = await tx(['beneficiaries','dupGroups','meta'],'readwrite');
+  t.objectStore('beneficiaries').clear();
+  t.objectStore('dupGroups').clear();
+  t.objectStore('meta').clear();
+  await txDone(t);
+  toast('All data deleted.');
+  refreshDashboard();
+});
+
+/* ---------------- demo data ---------------- */
+const DEMO_FIRST_F = ['Betania','Hana','Selam','Marta','Tigist','Meron','Rahel','Sara','Eden','Lidya','Hiwot','Bethel','Kalkidan','Mahlet','Ruth','Feven','Senait','Almaz','Genet','Aster'];
+const DEMO_FIRST_M = ['Abebe','Bekele','Dawit','Yonas','Samuel','Getachew','Tesfaye','Mulugeta','Solomon','Henok','Kirubel','Nahom','Eyob','Fitsum','Girma','Haile','Tadesse','Worku','Yared','Zerihun'];
+const DEMO_MID = ['Berhanu','Kebede','Alemu','Tadesse','Gebre','Assefa','Demissie','Fikre','Hailu','Lemma','Mekonnen','Negash','Tesfa','Wolde','Yilma','Abera','Bogale','Desta','Endale','Girmay'];
+const DEMO_REGIONS = [['Oromia',['East Shewa','West Arsi'],['Adama','Shashamane','Bishoftu']],['Amhara',['North Wollo','South Gondar'],['Woldia','Debre Tabor','Lalibela']],['Tigray',['Central','Eastern'],['Axum','Adigrat','Wukro']],['SNNP',['Sidama','Gedeo'],['Hawassa','Dilla','Yirgalem']],['Somali',['Fafan','Jarar'],['Jigjiga','Degehabur','Kebridehar']]];
+const DEMO_PROGRAMS = ['Cash transfer','Food assistance','Nutrition (CMAM)','WASH','Livelihoods','Education support'];
+function rnd(a){ return a[Math.floor(Math.random()*a.length)]; }
+function rndInt(a,b){ return a+Math.floor(Math.random()*(b-a+1)); }
+function typo(s){
+  if(s.length<4) return s;
+  const i = rndInt(1,s.length-2);
+  const kind = rndInt(0,2);
+  if(kind===0) return s.slice(0,i)+s.slice(i+1);                          // drop letter
+  if(kind===1) return s.slice(0,i)+s[i+1]+s[i]+s.slice(i+2);              // swap letters
+  return s.slice(0,i)+String.fromCharCode(97+rndInt(0,25))+s.slice(i);    // insert letter
+}
+function makeDemoRecord(seq){
+  const isF = Math.random()<0.55;
+  const first = isF ? rnd(DEMO_FIRST_F) : rnd(DEMO_FIRST_M);
+  const [region, zones, woredas] = rnd(DEMO_REGIONS);
+  const r = {
+    code:'BEN-'+String(100000+seq),
+    firstName:first, middleName:rnd(DEMO_MID), lastName:rnd(DEMO_MID),
+    sex:isF?'F':'M',
+    dob:`${rndInt(1945,2020)}-${String(rndInt(1,12)).padStart(2,'0')}-${String(rndInt(1,28)).padStart(2,'0')}`,
+    nationalId: Math.random()<0.75 ? 'ETH'+String(rndInt(10000000,99999999)) : '',
+    phone: Math.random()<0.8 ? '09'+String(rndInt(10000000,99999999)) : '',
+    householdId:'HH-'+String(rndInt(10000,99999)),
+    householdSize:String(rndInt(1,9)),
+    region, zone:rnd(zones), woreda:rnd(woredas), kebele:'Kebele '+rndInt(1,20),
+    program:rnd(DEMO_PROGRAMS),
+    regDate:`202${rndInt(3,6)}-${String(rndInt(1,12)).padStart(2,'0')}-${String(rndInt(1,28)).padStart(2,'0')}`,
+    notes:''
+  };
+  return r;
+}
+function makeDuplicateOf(r, seq){
+  const d = JSON.parse(JSON.stringify(r));
+  d.code = 'BEN-'+String(100000+seq);
+  const kind = rndInt(0,3);
+  if(kind===0){ d.firstName = typo(d.firstName); d.phone=''; }                      // typo in name, phone missing
+  else if(kind===1){ const t=d.middleName; d.middleName=d.lastName; d.lastName=t; } // swapped name order
+  else if(kind===2){ d.dob=''; d.kebele='Kebele '+rndInt(1,20); }                   // missing dob, moved
+  else { d.middleName = typo(d.middleName); d.nationalId=r.nationalId; }            // typo but same ID
+  d.regDate = `202${rndInt(3,6)}-${String(rndInt(1,12)).padStart(2,'0')}-${String(rndInt(1,28)).padStart(2,'0')}`;
+  return d;
+}
+$('#btn-demo').addEventListener('click', async ()=>{
+  const n = Math.max(100, parseInt($('#demo-n').value)||5000);
+  if(!confirm('Add '+fmtN(n)+' demo records (with ~3% planted duplicates) to the registry?')) return;
+  $('#btn-demo').disabled = true;
+  try{
+    let batch=[], made=0, seq = Date.now()%1000000;
+    const originals=[];
+    while(made<n){
+      const r = makeDemoRecord(seq+made);
+      originals.push(r);
+      batch.push(deriveKeys({...r}));
+      made++;
+      if(Math.random()<0.03 && made<n){
+        batch.push(deriveKeys(makeDuplicateOf(r, seq+made)));
+        made++;
+      }
+      if(batch.length>=4000){ await putRecords(batch); batch=[]; }
+    }
+    if(batch.length) await putRecords(batch);
+    toast(fmtN(n)+' demo records added.');
+    refreshDashboard();
+  } finally { $('#btn-demo').disabled=false; }
+});
+
+/* ---------------- init ---------------- */
+loadSettingsUI();
+refreshDashboard();
+</script>
+</body>
+</html>
