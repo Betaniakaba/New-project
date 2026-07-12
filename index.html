@@ -608,18 +608,20 @@ onmessage = function(e){
   for(var i=0;i<n;i++) byId[rows[i].id] = rows[i];
 
   /* ---- build blocks ---- */
-  var blocks = { name:{}, dob:{}, phone:{}, nid:{}, hh:{} };
+  var blocks = { name:{}, namePair:{}, dob:{}, phone:{}, nid:{}, hh:{} };
   function push(map,key,id){ if(!key) return; (map[key]||(map[key]=[])).push(id); }
   for(var i2=0;i2<n;i2++){
     var r = rows[i2];
     var codes = r.nk ? r.nk.split(' ').map(soundex).sort() : [];
     push(blocks.name, codes.join('.'), r.id);
     /* pair-of-token keys: one divergent, misspelled or missing name part
-       no longer removes a record from name blocking entirely */
+       no longer removes a record from name blocking entirely. These keys are
+       far less selective than full-name keys (common two-name combinations),
+       so they get their own, much tighter block cap below. */
     if(codes.length>=2){
       for(var x1=0;x1<codes.length-1;x1++)
         for(var y1=x1+1;y1<codes.length;y1++)
-          push(blocks.name, 'p:'+codes[x1]+'.'+codes[y1], r.id);
+          push(blocks.namePair, codes[x1]+'.'+codes[y1], r.id);
     }
     push(blocks.dob, r.dob, r.id);
     push(blocks.phone, r.ph, r.id);
@@ -627,7 +629,9 @@ onmessage = function(e){
     push(blocks.hh, r.hh, r.id);
   }
 
-  var pairScores = {};   /* "a_b" -> already compared */
+  /* numeric pair keys (a*2^24+b, ids ascending) in a Set: string keys at
+     millions of pairs would dominate scan memory */
+  var seenPairs = new Set();
   var edges = [];        /* strong links: clustered transitively */
   var weak = [];         /* possible links: reported as standalone pairs, never chained */
   var skippedBlocks = 0, pairsScored = 0;
@@ -667,10 +671,10 @@ onmessage = function(e){
     ids.sort(function(a,b){return a-b;});
     for(var x=0;x<ids.length-1;x++){
       for(var y=x+1;y<ids.length;y++){
-        var k = ids[x]+'_'+ids[y];
-        if(pairScores[k]) continue;
+        var k = ids[x]*16777216 + ids[y];
+        if(seenPairs.has(k)) continue;
         var res = scorePair(byId[ids[x]], byId[ids[y]]);
-        pairScores[k] = true;
+        seenPairs.add(k);
         pairsScored++;
         if(res.score >= cfg.thHigh){
           /* strong evidence: safe to merge transitively */
@@ -685,8 +689,10 @@ onmessage = function(e){
     }
   }
 
+  var pairCap = Math.min(120, cfg.maxBlock);  /* pair-of-token keys are broad: force early splitting */
   var blockSets = [
     ['name', blocks.name, cfg.maxBlock],
+    ['namePair', blocks.namePair, pairCap],
     ['dob', blocks.dob, cfg.maxBlock],
     ['phone', blocks.phone, cfg.maxBlock],
     ['hh', blocks.hh, cfg.maxBlock]
