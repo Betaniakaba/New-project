@@ -1,0 +1,14 @@
+# Secrets — never commit environment files (keep .env.example as the shareable template)
+.env
+.env.*
+!.env.example
+
+# Beneficiary data exports produced by the app — these contain personal data
+# (names, IDs, phone numbers) and must never be pushed to a repository
+beneficiaries-export-*.csv
+duplicate-report-*.csv
+
+# Dependencies & tooling
+node_modules/
+.DS_Store
+*.log
